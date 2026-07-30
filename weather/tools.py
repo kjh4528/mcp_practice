@@ -1,5 +1,8 @@
+from mcp.server import MCPServer
+
 from nws_api import NWS_API_BASE, make_nws_request
-from server import mcp
+
+mcp = MCPServer("weather")
 
 
 def format_alert(feature: dict) -> str:

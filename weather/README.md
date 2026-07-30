@@ -17,19 +17,27 @@
 
 ```
 weather/
-├── nws_api.py   # NWS API 호출 전담 (NWS_API_BASE, USER_AGENT, make_nws_request)
-├── tools.py     # MCP 도구 정의 (@mcp.tool()) + 응답 포맷팅 (format_alert)
-└── server.py    # MCPServer 인스턴스 생성 + 실행 진입점
+├── nws_api.py   # NWS API 호출 (NWS_API_BASE, USER_AGENT, make_nws_request)
+├── tools.py     # MCPServer 인스턴스 생성 + MCP 도구 정의 (@mcp.tool()) + 응답 포맷팅 (format_alert)
+└── server.py    # 실행 진입점 (tools.py에서 mcp를 가져와 mcp.run()만 호출)
 ```
 
 의존 방향
 
 ```
-server.py  →  tools.py   (파일 맨 아래에서 import — 데코레이터를 실행시켜 도구를 등록하기 위한 목적)
-tools.py   →  server.py  (mcp 인스턴스 사용), nws_api.py (make_nws_request 사용)
+server.py  →  tools.py   (mcp 인스턴스를 가져오기 위해 import)
+tools.py   →  nws_api.py (make_nws_request 사용)
 ```
 
-`server.py`가 `tools.py`를 import하고 `tools.py`가 다시 `server.py`의 `mcp` 인스턴스를 가져오는 구조라 얼핏 순환 참조처럼 보이지만, `@mcp.tool()` 데코레이터가 실제로 실행되어 도구가 등록되려면 어딘가에서 `tools` 모듈이 import되어야 하기 때문에 필요한 구조라는 걸 이번에 이해했습니다.
+### 트러블슈팅: `list_tools()`가 빈 목록을 반환한 문제
+
+처음에는 `server.py`에서 `mcp = MCPServer("weather")`를 생성하고, `tools.py`에서 `from server import mcp`로 가져와 도구를 등록했다. 그러나 `python server.py`로 실행하면 `server.py`는 `__main__` 모듈로 로드된다. 이후 `tools.py`가 `server`라는 이름으로 같은 파일을 다시 import하면서 `mcp` 인스턴스가 두 개로 분리됐다.
+
+그 결과 `@mcp.tool()`로 등록한 도구는 한 인스턴스에, `mcp.run()`으로 실행한 서버는 다른 인스턴스에 연결되어 `list_tools()`가 빈 목록을 반환했다.
+
+해결 방법으로 `tools.py`에서 `mcp` 인스턴스를 한 번만 생성하고 도구를 등록했다. `server.py`는 `from tools import mcp`로 동일한 인스턴스를 가져와 실행만 하도록 변경했다.
+
+> 실행 진입점(`__main__`) 파일을 다른 모듈에서 다시 import하면 상태가 중복될 수 있다. 공유 객체는 엔트리포인트가 아닌 별도 모듈에서 생성하는 편이 안전하다.
 
 ## 로컬 MCP vs 원격 MCP
 
